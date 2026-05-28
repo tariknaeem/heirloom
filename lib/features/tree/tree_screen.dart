@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models.dart';
 import '../../providers.dart';
 import '../../theme.dart';
+import '../person/edit_person_screen.dart';
 import 'person_card.dart';
 import 'tree_layout.dart';
 
@@ -66,6 +67,23 @@ class _TreeScreenState extends ConsumerState<TreeScreen> {
         visualDensity: VisualDensity.compact,
       ),
     );
+  }
+
+  // ── add person ────────────────────────────────────────────────────────────
+
+  Future<void> _addPerson() async {
+    final added = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const EditPersonScreen()),
+    );
+    // peopleProvider auto-refetches via dataVersion bump on save; focus the
+    // newly added person if this was the first one.
+    if (added == true && mounted && _focusId == null) {
+      final people = ref.read(peopleProvider).valueOrNull;
+      if (people != null && people.isNotEmpty) {
+        setState(() => _focusId = people.last.id);
+      }
+    }
   }
 
   // ── empty state ───────────────────────────────────────────────────────────
@@ -237,6 +255,13 @@ class _TreeScreenState extends ConsumerState<TreeScreen> {
             child: _layoutSwitcher(),
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _addPerson,
+        backgroundColor: kAccent,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.person_add_alt_1_rounded),
+        label: const Text('Add person'),
       ),
       body: peopleAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'features/home/home_shell.dart';
 import 'theme.dart';
 
 void main() => runApp(const ProviderScope(child: HeirloomApp()));
@@ -13,6 +14,6 @@ class HeirloomApp extends StatelessWidget {
         title: 'Heirloom',
         debugShowCheckedModeBanner: false,
         theme: heirloomTheme(),
-        home: const Scaffold(body: Center(child: Text('Heirloom'))),
+        home: const HomeShell(),
       );
 }
