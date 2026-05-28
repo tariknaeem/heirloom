@@ -7,7 +7,10 @@ import '../../models.dart';
 import '../../providers.dart';
 import '../../theme.dart';
 import 'edit_person_screen.dart';
+import 'events_section.dart';
+import 'gallery_section.dart';
 import 'relationship_picker.dart';
+import 'stories_section.dart';
 
 class ProfileScreen extends ConsumerWidget {
   final String personId;
@@ -177,9 +180,21 @@ class _ProfileBody extends ConsumerWidget {
                     label: 'Siblings',
                     future: repo.siblingsOf(person.id),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 28),
                 ],
               ),
+            ),
+          ),
+
+          // ── Timeline · Photos · Stories ─────────────────────────────────
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                EventsSection(personId: person.id),
+                GallerySection(personId: person.id),
+                StoriesSection(personId: person.id),
+              ]),
             ),
           ),
         ],

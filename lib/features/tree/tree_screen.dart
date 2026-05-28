@@ -5,6 +5,7 @@ import '../../models.dart';
 import '../../providers.dart';
 import '../../theme.dart';
 import '../person/edit_person_screen.dart';
+import '../settings/settings_screen.dart';
 import 'person_card.dart';
 import 'tree_layout.dart';
 
@@ -248,6 +249,16 @@ class _TreeScreenState extends ConsumerState<TreeScreen> {
       appBar: AppBar(
         backgroundColor: kBg,
         title: const Text('Family'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(52),
           child: Padding(
