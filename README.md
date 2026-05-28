@@ -40,6 +40,16 @@ flutter build apk --release
 flutter install       # to a connected device
 ```
 
+## Releasing
+
+One command builds, tests, tags, pushes to GitHub + GitLab, and publishes a
+release with the APK on both:
+
+```bash
+./release.sh 1.0.2   # bump to 1.0.2 and release
+./release.sh         # re-release the current pubspec version
+```
+
 ## License
 
 Personal project. Free to use.
