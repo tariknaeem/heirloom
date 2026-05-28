@@ -60,8 +60,8 @@ class PersonCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const SizedBox(width: 10),
-            _buildAvatar(),
+            const SizedBox(width: 8),
+            _buildThumbnail(),
             const SizedBox(width: 10),
             Expanded(child: _buildText()),
             _buildOpenButton(),
@@ -71,26 +71,42 @@ class PersonCard extends StatelessWidget {
     );
   }
 
-  Widget _buildAvatar() {
-    final initials = _initials(person.displayName);
+  Widget _buildThumbnail() {
+    final side = (height - 16).clamp(40.0, 72.0);
     final hasPhoto =
         person.photoPath != null && person.photoPath!.isNotEmpty;
 
-    return CircleAvatar(
-      radius: 22,
-      backgroundColor: kAccent.withValues(alpha: 0.15),
-      backgroundImage:
-          hasPhoto ? FileImage(File(person.photoPath!)) : null,
-      child: hasPhoto
-          ? null
-          : Text(
-              initials,
-              style: const TextStyle(
-                color: kAccent,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-              ),
-            ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(kRadius - 6),
+      child: SizedBox(
+        width: side,
+        height: side,
+        child: hasPhoto
+            ? Image.file(
+                File(person.photoPath!),
+                width: side,
+                height: side,
+                fit: BoxFit.cover,
+                // Broken/missing file → fall back to the initials placeholder.
+                errorBuilder: (context, error, stack) => _initialsThumb(),
+              )
+            : _initialsThumb(),
+      ),
+    );
+  }
+
+  Widget _initialsThumb() {
+    return Container(
+      color: kAccent.withValues(alpha: 0.12),
+      alignment: Alignment.center,
+      child: Text(
+        _initials(person.displayName),
+        style: const TextStyle(
+          color: kAccent,
+          fontWeight: FontWeight.w700,
+          fontSize: 16,
+        ),
+      ),
     );
   }
 
