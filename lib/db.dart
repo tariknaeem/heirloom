@@ -150,12 +150,15 @@ class SqfliteFamilyRepository implements FamilyRepository {
       where: "type = 'parentChild' AND personB = ?",
       whereArgs: [id],
     );
-    final result = <Person>[];
+    final result = <String, Person>{};
     for (final r in rels) {
-      final person = await getPerson(r['personA'] as String);
-      if (person != null) result.add(person);
+      final parentId = r['personA'] as String;
+      if (parentId == id) continue; // self-parent guard
+      if (result.containsKey(parentId)) continue; // dedup duplicate rows
+      final person = await getPerson(parentId);
+      if (person != null) result[parentId] = person;
     }
-    return result;
+    return result.values.toList();
   }
 
   @override
@@ -167,12 +170,15 @@ class SqfliteFamilyRepository implements FamilyRepository {
       where: "type = 'parentChild' AND personA = ?",
       whereArgs: [id],
     );
-    final result = <Person>[];
+    final result = <String, Person>{};
     for (final r in rels) {
-      final person = await getPerson(r['personB'] as String);
-      if (person != null) result.add(person);
+      final childId = r['personB'] as String;
+      if (childId == id) continue; // self-child guard
+      if (result.containsKey(childId)) continue; // dedup duplicate rows
+      final person = await getPerson(childId);
+      if (person != null) result[childId] = person;
     }
-    return result;
+    return result.values.toList();
   }
 
   @override
@@ -184,14 +190,16 @@ class SqfliteFamilyRepository implements FamilyRepository {
       where: "type = 'spouse' AND (personA = ? OR personB = ?)",
       whereArgs: [id, id],
     );
-    final result = <Person>[];
+    final result = <String, Person>{};
     for (final r in rels) {
       final otherId =
           (r['personA'] as String) == id ? r['personB'] as String : r['personA'] as String;
+      if (otherId == id) continue; // self-spouse guard
+      if (result.containsKey(otherId)) continue; // dedup duplicate rows
       final person = await getPerson(otherId);
-      if (person != null) result.add(person);
+      if (person != null) result[otherId] = person;
     }
-    return result;
+    return result.values.toList();
   }
 
   @override

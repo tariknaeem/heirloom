@@ -182,4 +182,70 @@ void main() {
       expect(result.height, greaterThan(0));
     });
   });
+
+  group('layoutDescendants', () {
+    test('places root at gen 0 and children below', () {
+      // dad -> me, dad -> sis ; me -> kid
+      final people = [
+        _person('dad', 'Dad'),
+        _person('me', 'Me'),
+        _person('sis', 'Sis'),
+        _person('kid', 'Kid'),
+      ];
+      final rels = [
+        _parentChild('dad', 'me'),
+        _parentChild('dad', 'sis'),
+        _parentChild('me', 'kid'),
+      ];
+      final result = layoutDescendants('dad', people, rels);
+      expect(result.nodes.length, 4);
+      final byId = {for (final n in result.nodes) n.person.id: n};
+      expect(byId['dad']!.generation, 0);
+      expect(byId['me']!.generation, 1);
+      expect(byId['sis']!.generation, 1);
+      expect(byId['kid']!.generation, 2);
+      // Root sits above its descendants (smaller y).
+      expect(byId['dad']!.y, lessThan(byId['me']!.y));
+      expect(byId['me']!.y, lessThan(byId['kid']!.y));
+    });
+
+    test('single-person tree returns exactly 1 node, no edges', () {
+      final result = layoutDescendants('solo', [_person('solo', 'Solo')], []);
+      expect(result.nodes.length, 1);
+      expect(result.edges.isEmpty, isTrue);
+      expect(result.width, greaterThan(0));
+      expect(result.height, greaterThan(0));
+    });
+
+    test('is cycle-safe: a parent/child loop does not hang or duplicate', () {
+      // Corrupt data: a is parent of b AND b is parent of a.
+      final people = [_person('a', 'A'), _person('b', 'B')];
+      final rels = [_parentChild('a', 'b'), _parentChild('b', 'a')];
+      final result = layoutDescendants('a', people, rels);
+      // Each person appears at most once.
+      final ids = result.nodes.map((n) => n.person.id).toList();
+      expect(ids.toSet().length, ids.length);
+      expect(ids.toSet(), {'a', 'b'});
+    });
+  });
+
+  group('corrupt-data resilience', () {
+    test('self-parent edge produces no self-loop edge and no extra node', () {
+      // me is wrongly recorded as their own parent.
+      final people = [_person('me', 'Me')];
+      final rels = [_parentChild('me', 'me')];
+      final result = layoutPedigree('me', people, rels);
+      expect(result.nodes.map((n) => n.person.id).toList(), ['me']);
+      // No edge from me to me.
+      expect(result.edges.where((e) => e[0] == e[1]), isEmpty);
+    });
+
+    test('duplicate parentChild rows yield a single edge', () {
+      final people = [_person('dad', 'Dad'), _person('me', 'Me')];
+      final rels = [_parentChild('dad', 'me'), _parentChild('dad', 'me')];
+      final result = layoutPedigree('me', people, rels);
+      expect(result.edges.where((e) => e[0] == 'dad' && e[1] == 'me'),
+          hasLength(1));
+    });
+  });
 }

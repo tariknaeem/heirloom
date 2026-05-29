@@ -9,7 +9,7 @@ import '../settings/settings_screen.dart';
 import 'person_card.dart';
 import 'tree_layout.dart';
 
-enum _TreeLayout { pedigree, horizontal, list }
+enum _TreeLayout { pedigree, descendants, horizontal, list }
 
 /// The signature family-tree screen.
 ///
@@ -44,8 +44,13 @@ class _TreeScreenState extends ConsumerState<TreeScreen> {
       segments: const [
         ButtonSegment(
           value: _TreeLayout.pedigree,
-          label: Text('Pedigree'),
+          label: Text('Ancestors'),
           icon: Icon(Icons.account_tree_rounded),
+        ),
+        ButtonSegment(
+          value: _TreeLayout.descendants,
+          label: Text('Descendants'),
+          icon: Icon(Icons.family_restroom_rounded),
         ),
         ButtonSegment(
           value: _TreeLayout.horizontal,
@@ -148,16 +153,22 @@ class _TreeScreenState extends ConsumerState<TreeScreen> {
   Widget _buildTreeView(
     List<Person> people,
     List<Relationship> rels,
-    bool isPedigree,
+    _TreeLayout layout,
   ) {
     final focusId = _focusId ?? (people.isEmpty ? null : people.first.id);
     if (focusId == null) return _empty();
 
-    final result = isPedigree
-        ? layoutPedigree(focusId, people, rels,
-            nodeW: _cardW, nodeH: _cardH)
-        : layoutHorizontal(focusId, people, rels,
-            nodeW: _cardW, nodeH: _cardH);
+    final isVertical = layout != _TreeLayout.horizontal;
+    final TreeLayoutResult result = switch (layout) {
+      _TreeLayout.pedigree =>
+        layoutPedigree(focusId, people, rels, nodeW: _cardW, nodeH: _cardH),
+      _TreeLayout.descendants =>
+        layoutDescendants(focusId, people, rels, nodeW: _cardW, nodeH: _cardH),
+      _TreeLayout.horizontal =>
+        layoutHorizontal(focusId, people, rels, nodeW: _cardW, nodeH: _cardH),
+      _TreeLayout.list =>
+        layoutPedigree(focusId, people, rels, nodeW: _cardW, nodeH: _cardH),
+    };
 
     if (result.nodes.isEmpty) {
       // Fallback: just show the focus person alone
@@ -171,10 +182,10 @@ class _TreeScreenState extends ConsumerState<TreeScreen> {
         _cardW,
         _cardH,
       );
-      return _treeCanvas(singleResult, isPedigree);
+      return _treeCanvas(singleResult, isVertical);
     }
 
-    return _treeCanvas(result, isPedigree);
+    return _treeCanvas(result, isVertical);
   }
 
   Widget _treeCanvas(TreeLayoutResult result, bool isPedigree) {
@@ -317,7 +328,7 @@ class _TreeScreenState extends ConsumerState<TreeScreen> {
             data: (rels) => _buildTreeView(
               people,
               rels,
-              _layout == _TreeLayout.pedigree,
+              _layout,
             ),
           );
         },

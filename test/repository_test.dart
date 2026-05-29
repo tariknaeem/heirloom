@@ -29,6 +29,41 @@ void main() {
     expect((await repo.spousesOf('mom')).map((p) => p.id).toSet(), {'dad'});
   });
 
+  test('spousesOf ignores a relationship pointing at a missing person', () async {
+    // Regression: spousesOf used a null-assertion (!) and crashed when a
+    // spouse row referenced a person that no longer existed.
+    await repo.upsertPerson(Person(id: 'me', displayName: 'Me'));
+    await repo.addRelationship(Relationship(
+        id: 'r', type: RelType.spouse, personA: 'me', personB: 'ghost'));
+    final spouses = await repo.spousesOf('me'); // must not throw
+    expect(spouses, isEmpty);
+  });
+
+  test('spousesOf de-duplicates and excludes self', () async {
+    await repo.upsertPerson(Person(id: 'a', displayName: 'A'));
+    await repo.upsertPerson(Person(id: 'b', displayName: 'B'));
+    // Two identical spouse rows + one self-referential row.
+    await repo.addRelationship(Relationship(
+        id: 'r1', type: RelType.spouse, personA: 'a', personB: 'b'));
+    await repo.addRelationship(Relationship(
+        id: 'r2', type: RelType.spouse, personA: 'b', personB: 'a'));
+    await repo.addRelationship(Relationship(
+        id: 'r3', type: RelType.spouse, personA: 'a', personB: 'a'));
+    final spouses = await repo.spousesOf('a');
+    expect(spouses.map((p) => p.id).toList(), ['b']);
+  });
+
+  test('parentsOf/childrenOf de-duplicate duplicate relationship rows', () async {
+    await repo.upsertPerson(Person(id: 'p', displayName: 'P'));
+    await repo.upsertPerson(Person(id: 'c', displayName: 'C'));
+    await repo.addRelationship(Relationship(
+        id: 'r1', type: RelType.parentChild, personA: 'p', personB: 'c'));
+    await repo.addRelationship(Relationship(
+        id: 'r2', type: RelType.parentChild, personA: 'p', personB: 'c'));
+    expect((await repo.childrenOf('p')).map((x) => x.id).toList(), ['c']);
+    expect((await repo.parentsOf('c')).map((x) => x.id).toList(), ['p']);
+  });
+
   test('deletePerson removes their relationships', () async {
     await repo.upsertPerson(Person(id: 'a', displayName: 'A'));
     await repo.upsertPerson(Person(id: 'b', displayName: 'B'));

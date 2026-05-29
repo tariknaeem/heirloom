@@ -8,11 +8,17 @@ import '../../models.dart';
 import '../../providers.dart';
 import '../../theme.dart';
 import 'edit_person_screen.dart';
+import 'relationship_rules.dart';
 
 // ─── Helper functions ─────────────────────────────────────────────────────────
 
-Future<void> addParent(WidgetRef ref, String childId, String parentId) async {
+/// Adds a parent→child link if it is valid. Returns null on success, or a
+/// human-readable reason it was rejected (self-link, duplicate, cycle).
+Future<String?> addParent(WidgetRef ref, String childId, String parentId) async {
   final repo = ref.read(repositoryProvider);
+  final existing = await repo.allRelationships();
+  final check = canAddParentChild(parentId, childId, existing);
+  if (!check.ok) return check.reason;
   await repo.addRelationship(Relationship(
     id: const Uuid().v4(),
     type: RelType.parentChild,
@@ -20,10 +26,14 @@ Future<void> addParent(WidgetRef ref, String childId, String parentId) async {
     personB: childId,
   ));
   ref.read(dataVersionProvider.notifier).state++;
+  return null;
 }
 
-Future<void> addChild(WidgetRef ref, String parentId, String childId) async {
+Future<String?> addChild(WidgetRef ref, String parentId, String childId) async {
   final repo = ref.read(repositoryProvider);
+  final existing = await repo.allRelationships();
+  final check = canAddParentChild(parentId, childId, existing);
+  if (!check.ok) return check.reason;
   await repo.addRelationship(Relationship(
     id: const Uuid().v4(),
     type: RelType.parentChild,
@@ -31,11 +41,15 @@ Future<void> addChild(WidgetRef ref, String parentId, String childId) async {
     personB: childId,
   ));
   ref.read(dataVersionProvider.notifier).state++;
+  return null;
 }
 
-Future<void> addSpouse(
+Future<String?> addSpouse(
     WidgetRef ref, String personAId, String personBId) async {
   final repo = ref.read(repositoryProvider);
+  final existing = await repo.allRelationships();
+  final check = canAddSpouse(personAId, personBId, existing);
+  if (!check.ok) return check.reason;
   await repo.addRelationship(Relationship(
     id: const Uuid().v4(),
     type: RelType.spouse,
@@ -43,6 +57,7 @@ Future<void> addSpouse(
     personB: personBId,
   ));
   ref.read(dataVersionProvider.notifier).state++;
+  return null;
 }
 
 // ─── RelationshipPicker bottom sheet ─────────────────────────────────────────
@@ -61,14 +76,15 @@ class RelationshipPicker extends ConsumerStatefulWidget {
 class _RelationshipPickerState extends ConsumerState<RelationshipPicker> {
   _RelKind _kind = _RelKind.parent;
 
-  Future<void> _linkPerson(String otherId) async {
+  /// Returns null on success or a rejection reason to surface to the user.
+  Future<String?> _linkPerson(String otherId) async {
     switch (_kind) {
       case _RelKind.parent:
-        await addParent(ref, widget.focusPersonId, otherId);
+        return addParent(ref, widget.focusPersonId, otherId);
       case _RelKind.child:
-        await addChild(ref, widget.focusPersonId, otherId);
+        return addChild(ref, widget.focusPersonId, otherId);
       case _RelKind.spouse:
-        await addSpouse(ref, widget.focusPersonId, otherId);
+        return addSpouse(ref, widget.focusPersonId, otherId);
     }
   }
 
@@ -227,8 +243,15 @@ class _RelationshipPickerState extends ConsumerState<RelationshipPicker> {
                               .where((p) => p.id != widget.focusPersonId)
                               .toList();
                           if (newPeople.isEmpty) return;
-                          await _linkPerson(newPeople.last.id);
-                          if (context.mounted) Navigator.pop(context);
+                          final err = await _linkPerson(newPeople.last.id);
+                          if (!context.mounted) return;
+                          if (err != null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(err)),
+                            );
+                            return;
+                          }
+                          Navigator.pop(context);
                         },
                       ),
                       if (others.isNotEmpty)
@@ -253,8 +276,15 @@ class _RelationshipPickerState extends ConsumerState<RelationshipPicker> {
                                 )
                               : null,
                           onTap: () async {
-                            await _linkPerson(person.id);
-                            if (context.mounted) Navigator.pop(context);
+                            final err = await _linkPerson(person.id);
+                            if (!context.mounted) return;
+                            if (err != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(err)),
+                              );
+                              return;
+                            }
+                            Navigator.pop(context);
                           },
                         ),
                     ],

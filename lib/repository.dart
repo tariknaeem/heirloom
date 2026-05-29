@@ -67,30 +67,44 @@ class InMemoryFamilyRepository implements FamilyRepository {
   List<Relationship> get _rl => _rels.values.toList();
 
   @override
-  Future<List<Person>> parentsOf(String id) async => [
-        for (final r in _rl)
-          if (r.type == RelType.parentChild &&
-              r.personB == id &&
-              _people[r.personA] != null)
-            _people[r.personA]!
-      ];
+  Future<List<Person>> parentsOf(String id) async {
+    final seen = <String, Person>{};
+    for (final r in _rl) {
+      if (r.type != RelType.parentChild || r.personB != id) continue;
+      if (r.personA == id) continue; // self-parent guard
+      final parent = _people[r.personA];
+      if (parent != null) seen[r.personA] = parent;
+    }
+    return seen.values.toList();
+  }
 
   @override
-  Future<List<Person>> childrenOf(String id) async => [
-        for (final r in _rl)
-          if (r.type == RelType.parentChild &&
-              r.personA == id &&
-              _people[r.personB] != null)
-            _people[r.personB]!
-      ];
+  Future<List<Person>> childrenOf(String id) async {
+    final seen = <String, Person>{};
+    for (final r in _rl) {
+      if (r.type != RelType.parentChild || r.personA != id) continue;
+      if (r.personB == id) continue; // self-child guard
+      final child = _people[r.personB];
+      if (child != null) seen[r.personB] = child;
+    }
+    return seen.values.toList();
+  }
 
   @override
-  Future<List<Person>> spousesOf(String id) async => [
-        for (final r in _rl)
-          if (r.type == RelType.spouse &&
-              (r.personA == id || r.personB == id))
-            _people[r.personA == id ? r.personB : r.personA]!
-      ];
+  Future<List<Person>> spousesOf(String id) async {
+    final seen = <String, Person>{};
+    for (final r in _rl) {
+      if (r.type != RelType.spouse) continue;
+      if (r.personA != id && r.personB != id) continue;
+      final otherId = r.personA == id ? r.personB : r.personA;
+      // Guard against a self-referential spouse row and against a row that
+      // points to a person who no longer exists (e.g. deleted relative).
+      if (otherId == id) continue;
+      final other = _people[otherId];
+      if (other != null) seen[otherId] = other;
+    }
+    return seen.values.toList();
+  }
 
   @override
   Future<List<Person>> siblingsOf(String id) async {

@@ -29,8 +29,11 @@ Map<String, List<String>> _buildParentMap(List<Relationship> rels) {
   final map = <String, List<String>>{};
   for (final r in rels) {
     if (r.type == RelType.parentChild) {
-      // personA = parent, personB = child
-      map.putIfAbsent(r.personB, () => []).add(r.personA);
+      // personA = parent, personB = child. Skip self-edges (corrupt data)
+      // and duplicate parent entries so traversal stays well-behaved.
+      if (r.personA == r.personB) continue;
+      final parents = map.putIfAbsent(r.personB, () => []);
+      if (!parents.contains(r.personA)) parents.add(r.personA);
     }
   }
   return map;
@@ -67,18 +70,66 @@ Map<int, List<String>> _collectAncestorsByGeneration(
   return result;
 }
 
+/// Build a map of personId -> list of child IDs from [rels].
+Map<String, List<String>> _buildChildMap(List<Relationship> rels) {
+  final map = <String, List<String>>{};
+  for (final r in rels) {
+    if (r.type == RelType.parentChild) {
+      if (r.personA == r.personB) continue;
+      final kids = map.putIfAbsent(r.personA, () => []);
+      if (!kids.contains(r.personB)) kids.add(r.personB);
+    }
+  }
+  return map;
+}
+
+/// BFS downward from [rootId], collecting descendants grouped by generation.
+/// Generation 0 = root, generation 1 = children, generation 2 = grandchildren…
+/// Caps at [maxDepth] to stay bounded. Cycle-safe + deduplicated by id.
+Map<int, List<String>> _collectDescendantsByGeneration(
+  String rootId,
+  Map<String, List<String>> childMap, {
+  int maxDepth = 6,
+}) {
+  final result = <int, List<String>>{};
+  final visited = <String>{};
+  final queue = <(String, int)>[(rootId, 0)];
+
+  while (queue.isNotEmpty) {
+    final (id, gen) = queue.removeAt(0);
+    if (visited.contains(id)) continue;
+    if (gen > maxDepth) continue;
+    visited.add(id);
+    result.putIfAbsent(gen, () => []).add(id);
+
+    final children = childMap[id] ?? [];
+    for (final childId in children) {
+      if (!visited.contains(childId)) {
+        queue.add((childId, gen + 1));
+      }
+    }
+  }
+
+  return result;
+}
+
 /// Collect all edges where both endpoints are in [nodeSet].
 List<List<String>> _collectEdges(
   List<Relationship> rels,
   Set<String> nodeSet,
 ) {
   final edges = <List<String>>[];
+  final seen = <String>{};
   for (final r in rels) {
     if (r.type == RelType.parentChild) {
       final parent = r.personA;
       final child = r.personB;
+      if (parent == child) continue; // no self-edges
       if (nodeSet.contains(parent) && nodeSet.contains(child)) {
-        edges.add([parent, child]);
+        // Dedup so a duplicate relationship row doesn't draw a doubled line.
+        if (seen.add('$parent->$child')) {
+          edges.add([parent, child]);
+        }
       }
     }
   }
@@ -210,6 +261,70 @@ TreeLayoutResult layoutHorizontal(
       final person = personMap[id];
       if (person == null) continue;
       final yPos = colStartY + i * (nodeH + gapY);
+      nodes.add(TreeNode(person, x: xPos, y: yPos, generation: gen));
+    }
+  }
+
+  final nodeSet = {for (final n in nodes) n.person.id};
+  final edges = _collectEdges(rels, nodeSet);
+
+  return TreeLayoutResult(
+    nodes,
+    edges,
+    totalWidth.clamp(nodeW, double.infinity),
+    totalHeight.clamp(nodeH, double.infinity),
+  );
+}
+
+/// Build DESCENDANT layout.
+///
+/// Root is placed at the **top** (generation 0, smallest y). Each subsequent
+/// generation (children, grandchildren…) goes downward. Nodes in each
+/// generation are spread evenly across x, centered. Cycle-safe.
+///
+/// Mirror of [layoutPedigree] but walking the parent→child edges downward,
+/// so a user can view their family tree from an ancestor down to descendants.
+TreeLayoutResult layoutDescendants(
+  String rootId,
+  List<Person> people,
+  List<Relationship> rels, {
+  double nodeW = 150,
+  double nodeH = 84,
+  double gapX = 24,
+  double gapY = 70,
+}) {
+  final personMap = {for (final p in people) p.id: p};
+  final childMap = _buildChildMap(rels);
+  final byGen = _collectDescendantsByGeneration(rootId, childMap);
+
+  if (byGen.isEmpty) {
+    return TreeLayoutResult([], [], 0, 0);
+  }
+
+  final maxGen = byGen.keys.reduce((a, b) => a > b ? a : b);
+
+  int maxCount = 0;
+  for (final ids in byGen.values) {
+    if (ids.length > maxCount) maxCount = ids.length;
+  }
+  final totalWidth = maxCount * (nodeW + gapX) - gapX;
+  final totalHeight = (maxGen + 1) * (nodeH + gapY) - gapY;
+
+  // Generation 0 (root) sits at the top (y = 0); higher gens go downward.
+  final nodes = <TreeNode>[];
+  for (final genEntry in byGen.entries) {
+    final gen = genEntry.key;
+    final ids = genEntry.value;
+    final count = ids.length;
+    final rowWidth = count * (nodeW + gapX) - gapX;
+    final rowStartX = (totalWidth - rowWidth) / 2;
+    final yPos = gen * (nodeH + gapY);
+
+    for (int i = 0; i < ids.length; i++) {
+      final id = ids[i];
+      final person = personMap[id];
+      if (person == null) continue;
+      final xPos = rowStartX + i * (nodeW + gapX);
       nodes.add(TreeNode(person, x: xPos, y: yPos, generation: gen));
     }
   }
